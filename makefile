@@ -4,8 +4,12 @@ default_args = -pedantic -g
 libs = util.o logging.o
 tokenizer = regex-tokenizer.o token.o -lncurses
 
-regex-tokenizer-main: regex-tokenizer-main.cpp
+regex-tokenizer-main: regex-tokenizer-main.cpp $(tokenizer)
 	g++ regex-tokenizer-main.cpp $(tokenizer) $(libs) $(default_args) $(includes) -o regex-tokenizer-main
+
+# one off test files
+test_regex: test_regex.cpp
+	g++ test_regex.cpp $(default_args) -o test_regex
 
 # ===============================================================================
 # Object Files

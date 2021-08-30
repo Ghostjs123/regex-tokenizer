@@ -5,6 +5,9 @@
 #include "token.h"
 #include "util.h"
 
+/**
+ *  @brief Empty constructor. Creates an "undefined" Token.
+**/
 Token::Token() {
     this->type = "unknown";
     this->value = "undefined";
@@ -13,6 +16,9 @@ Token::Token() {
     this->line_end = -1;
     this->column_end = -1;
 }
+/**
+ *  @brief char constructor.
+**/
 Token::Token(
     std::string type,
     char value,
@@ -26,6 +32,9 @@ Token::Token(
     this->line_end = std::get<0>(end);
     this->column_end = std::get<1>(end);
 }
+/**
+ *  @brief std::string constructor.
+**/
 Token::Token(
     std::string type,
     std::string value,
@@ -40,19 +49,10 @@ Token::Token(
     this->column_end = std::get<1>(end);
 }
 
-void Token::append(std::string s, Token t) {
-    if (this->line_start != t.line_start) {
-        throw std::runtime_error(
-            "Attempted to concat:\n" +
-            (std::string)(*this) + "\n" +
-            (std::string)t + "\n" +
-            "line numbers are not the same"
-        );
-    }
-    this->value += (s + t.value);
-    this->column_end = t.column_end;
-}
-
+/**
+ *  @brief Returns the state of this Token as a std::string.
+ *  @returns Token state information as a std::string.
+**/
 std::string Token::as_string() {
     std::string pos =
         std::to_string(line_start) + "," +

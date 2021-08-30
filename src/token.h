@@ -1,7 +1,6 @@
 #ifndef TOKEN_H
 #define TOKEN_H
 
-#include <vector>
 #include <string>
 #include <tuple>
 
@@ -24,7 +23,6 @@ class Token {
             std::tuple<int, int> end
         );
 
-		void append(std::string s, Token t);
 		std::string as_string();
         friend std::ostream& operator<<(std::ostream& os, const Token& token);
 		friend bool operator==(const Token& lhs, const Token& rhs);

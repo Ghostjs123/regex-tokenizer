@@ -1,3 +1,7 @@
 
 # Object files
 *.o
+
+# main executables
+regex-tokenizer-main
+test_regex

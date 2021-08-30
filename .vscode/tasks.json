@@ -9,6 +9,13 @@
             "command": "make",
             "args": [],
             "group": "build"
+        },
+        {
+            "label": "make test_regex",
+            "type": "shell",
+            "command": "make",
+            "args": ["test_regex"],
+            "group": "build"
         }
     ]
 }

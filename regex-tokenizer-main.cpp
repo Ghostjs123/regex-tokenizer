@@ -215,7 +215,7 @@ int main(int argc, char* argv[]) {
 		std::cout
 			<< "No file named \""
 			<< argv[1]
-			<< "\"" 
+			<< "\""
 			<< std::endl;
 		return 0;
 	}
