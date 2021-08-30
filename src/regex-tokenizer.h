@@ -28,7 +28,7 @@ class Tokenizer {
 
         // Token push functions
         void push_newline(int line_number, int current_pos);
-        void push_nl(int line_number);
+        void push_nl(int line_number, int current_pos);
         void push_token(
             std::string type,
             std::string value,

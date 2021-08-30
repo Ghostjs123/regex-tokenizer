@@ -145,6 +145,9 @@ int Tokenizer::lstrip_spaces(int line_number, int current_pos) {
     return next_position;
 }
 
+// NOTE: this function lines up pretty well with the _tokenize function from
+// https://github.com/python/cpython/blob/85fd9f4e45ee95e2608dbc8cc6d4fe28e4d2abc4/Lib/tokenize.py#L45
+// I'm borrowing some structure/logic from it to make sure my tokenization is 1:1
 /**
  *  @brief Main function to kick off tokenization.
 **/
@@ -153,6 +156,10 @@ void Tokenizer::tokenize() {
 
     // NOTE: flag for multi-line strings
     bool in_string = false;
+    // NOTE: counter for opening/closing ([{
+    int paren_level = 0;
+    const char open_parens[] = {'(', '[', '{'};
+    const char close_parens[] = {')', ']', '}'};
 
     for (int line_number=0; line_number < this->input.size(); line_number++) {
         // NOTE: intentionally ommiting '\r' and '\n'
@@ -161,7 +168,7 @@ void Tokenizer::tokenize() {
         // NOTE: check for empty line
         if (input[line_number].size() == 0) {
             // NOTE: found an empty line
-            this->push_nl(line_number);
+            this->push_nl(line_number, 0);
             continue;
         }
 
@@ -213,13 +220,37 @@ void Tokenizer::tokenize() {
                 line_number,
                 current_pos
             );
-            current_pos += std::get<1>(next_match).size();
 
+            // NOTE: check for opening/closing characters
+            if (
+                std::find(
+                std::begin(open_parens),
+                std::end(open_parens),
+                this->input[line_number][current_pos])
+            ) {
+                paren_level++;
+            }
+            else if (
+                std::find(
+                std::begin(open_parens),
+                std::end(open_parens),
+                this->input[line_number][current_pos])
+            ) {
+                paren_level--;
+            }
+
+            current_pos += std::get<1>(next_match).size();
+            // NOTE: skipping whitespace between tokens
             current_pos += this->lstrip_spaces(line_number, current_pos);
         }
 
-        // NOTE: done tokenizing the line, push a NEWLINE
-        this->push_newline(line_number, current_pos);
+        // NOTE: done tokenizing the line, push a NL/NEWLINE
+        if (paren_level > 0) {
+            this->push_nl(line_number, current_pos);
+        } else {
+            this->push_newline(line_number, current_pos);
+        }
+        
     }
 
     // NOTE: done tokenizing the file, cleanup and push ENDMARKER
@@ -299,14 +330,15 @@ void Tokenizer::push_newline(int line_number, int current_pos) {
 /**
  *  @brief Pushes a NL Token to this->tokens.
  *  @param line_number current line number being tokenized.
+ *  @param current_pos current position in the line.
 **/
-void Tokenizer::push_nl(int line_number) {
+void Tokenizer::push_nl(int line_number, int current_pos) {
     this->tokens.push_back(
         Token(
             "NL",
             "\\n",
-            {line_number+1, 0},
-            {line_number+1, 1}
+            {line_number+1, current_pos},
+            {line_number+1, current_pos+1}
         )
     );
 }
