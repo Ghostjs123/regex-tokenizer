@@ -21,6 +21,8 @@ class Tokenizer {
         void clear();
         void build_regexs();
         std::tuple<std::string, std::string> apply_regexs(std::string& line);
+        std::regex get_string_close_regex(std::string type);
+        int check_string_termination(std::string line, std::regex close_regex);
         int lstrip_spaces(int line_number, int current_pos);
 
         // main tokenization function
@@ -34,6 +36,12 @@ class Tokenizer {
             std::string value,
             int line_number,
             int current_pos
+        );
+        void push_token(
+            std::string type,
+            std::string value,
+            std::tuple<int, int> start,
+            std::tuple<int, int> end
         );
         void push_indent(std::string value, int line_number);
         void push_dedent(int line_number);

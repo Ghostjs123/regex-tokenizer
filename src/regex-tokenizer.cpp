@@ -4,6 +4,7 @@
 #include <string>
 #include <tuple>
 #include <numeric>
+#include <cassert>
 #include "logging.h"
 #include "util.h"
 #include "token.h"
@@ -80,6 +81,7 @@ Tokenizer::Tokenizer(std::vector<std::string> input) {
  *  @brief Initializes this->regexs.
 **/
 void Tokenizer::build_regexs() {
+    // NOTE: there is baked in top to bottom precedence here (top is highest)
     this->regexs = {
         {"OP", std::regex("^(\\()")},
         {"OP", std::regex("^(\\))")},
@@ -96,10 +98,14 @@ void Tokenizer::build_regexs() {
         {"OP", std::regex("^(\\*)")},
         {"OP", std::regex("^(//)")},
         {"OP", std::regex("^(/)")},
+        // NOTE: the following 4 STRING regex's handle strings that terminate on the same line
+        {"STRING", std::regex("^(\"\"\".*\"\"\")")},
+        {"STRING", std::regex("^('''.*''')")},
+        {"STRING", std::regex("^(r?b?\".*\")")},  // NOTE: strings can be like rb"" or just ""
+        {"STRING", std::regex("^(r?b?'.*')")},  // NOTE: strings can be like rb'' or just ''
+        // NOTE: these next 2 regex's are for multiline strings
         {"THREE_DOUBLE_QUOTES", std::regex("^(\"\"\")")},
         {"THREE_SINGLE_QUOTES", std::regex("^(''')")},
-        {"DOUBLE_QUOTES", std::regex("^(\")")},
-        {"SINGLE_QUOTES", std::regex("^(')")},
         {"COMMENT", std::regex("^(#.*)")},
         {"NUMBER", std::regex("^(-?[0-9.,]+)")},  // NOTE: using + and not *
         {"NAME", std::regex("^([a-zA-Z0-9_]+)")}  // NOTE: using + and not *
@@ -125,6 +131,24 @@ std::tuple<std::string, std::string> Tokenizer::apply_regexs(std::string& line) 
     }
 
     throw std::runtime_error("No regex matched: " + line);
+}
+
+std::regex Tokenizer::get_string_close_regex(std::string type) {
+    if (type == "THREE_DOUBLE_QUOTES") {
+        return std::regex("\"\"\"");
+    }
+    else if (type == "THREE_DOUBLE_QUOTES") {
+        return std::regex("'''");
+    }
+    throw std::runtime_error(
+        "Unhandled type '" +
+        type +
+        "' in Tokenizer::get_string_close_regex"
+    );
+}
+
+int Tokenizer::check_string_termination(std::string line, std::regex close_regex) {
+    return -1;
 }
 
 /**
@@ -156,57 +180,85 @@ void Tokenizer::tokenize() {
 
     // NOTE: flag for multi-line strings
     bool in_string = false;
+    std::string string_value;
+    std::string string_close_value;
+    std::tuple<int, int> string_start;
+    std::regex string_close_regex;
     // NOTE: counter for opening/closing ([{
     int paren_level = 0;
-    const char open_parens[] = {'(', '[', '{'};
-    const char close_parens[] = {')', ']', '}'};
+    const std::vector<char> open_parens{'(', '[', '{'};
+    const std::vector<char> close_parens{')', ']', '}'};
 
     for (int line_number=0; line_number < this->input.size(); line_number++) {
         // NOTE: intentionally ommiting '\r' and '\n'
         int current_pos = this->input[line_number].find_first_not_of("\t ");
 
-        // NOTE: check for empty line
-        if (input[line_number].size() == 0) {
-            // NOTE: found an empty line
-            this->push_nl(line_number, 0);
-            continue;
+        if (in_string) {
+            // NOTE: checking for the termination of the current multiline string
+            int termination_pos = this->check_string_termination(
+                this->input[line_number],
+                string_close_regex
+            );
+
+            if (termination_pos != -1) {
+                // NOTE: string terminates on this line
+                string_value += this->input[line_number].substr(0, termination_pos);
+                current_pos = termination_pos;
+                this->input[line_number].erase(0, termination_pos);
+                this->push_token(
+                    "STRING",
+                    string_value,
+                    string_start,
+                    {line_number+1, current_pos}
+                );
+                in_string = false;
+            }
+            else {
+                // NOTE: this line belongs to the current multiline string
+                string_value += "\n" + this->input[line_number];
+                continue;
+            }
         }
 
-        // NOTE: check for comments
-        if (input[line_number][current_pos] == '#') {
-            // NOTE: found a comment
-            this->push_token(
-                "COMMENT",
-                input[line_number].substr(current_pos),
-                line_number,
-                current_pos
-            );
-            continue;
-        }
-        
-        // NOTE: handle indentation
-        // NOTE: identation logic needs to be skipped on empty lines and comments
-        if (current_pos > indents.back()) {
-            // NOTE: indentation level increasing
-            indents.push_back(current_pos);
-            this->push_indent(
-                sub(this->input[line_number], 0, current_pos),
-                line_number
-            );
-            this->input[line_number].erase(0, current_pos);  // NOTE: erase indent
-        }
-        else if (current_pos < indents.back()) {
-            // NOTE: indentation level decreasing
-            while (current_pos < indents.back()) {
-                indents.pop_back();
-                this->push_dedent(line_number);
+        else if (paren_level == 0) {
+            if (input[line_number].size() == 0) {
+                // NOTE: found an empty line
+                this->push_nl(line_number, 0);
+                continue;
+            }
+            else if (input[line_number][current_pos] == '#') {
+                // NOTE: found a comment
+                this->push_token(
+                    "COMMENT",
+                    input[line_number].substr(current_pos),
+                    line_number,
+                    current_pos
+                );
+                continue;
             }
 
-            if (current_pos != indents.back()) {
-                throw std::runtime_error(
-                    "line " + std::to_string(line_number+1) +
-                    "\nunindent does not match any outer indentation level"
+            if (current_pos > indents.back()) {
+                // NOTE: indentation level increasing
+                indents.push_back(current_pos);
+                this->push_indent(
+                    sub(this->input[line_number], 0, current_pos),
+                    line_number
                 );
+                this->input[line_number].erase(0, current_pos);  // NOTE: erase indent
+            }
+            else if (current_pos < indents.back()) {
+                // NOTE: indentation level decreasing
+                while (current_pos < indents.back()) {
+                    indents.pop_back();
+                    this->push_dedent(line_number);
+                }
+
+                if (current_pos != indents.back()) {
+                    throw std::runtime_error(
+                        "line " + std::to_string(line_number+1) +
+                        "\nunindent does not match any outer indentation level"
+                    );
+                }
             }
         }
 
@@ -214,29 +266,62 @@ void Tokenizer::tokenize() {
         while (this->input[line_number].size() > 0) {
             auto next_match = this->apply_regexs(this->input[line_number]);
 
-            this->push_token(
-                std::get<0>(next_match),
-                std::get<1>(next_match),
-                line_number,
-                current_pos
-            );
-
-            // NOTE: check for opening/closing characters
             if (
-                std::find(
-                std::begin(open_parens),
-                std::end(open_parens),
-                this->input[line_number][current_pos])
+                std::get<0>(next_match) == "NUMBER" ||
+                std::get<0>(next_match) == "COMMENT" ||
+                std::get<0>(next_match) == "NAME" ||
+                std::get<0>(next_match) == "STRING"
             ) {
-                paren_level++;
+                // NOTE: default Tokens, no extra work needed
+                this->push_token(
+                    std::get<0>(next_match),
+                    std::get<1>(next_match),
+                    line_number,
+                    current_pos
+                );
             }
             else if (
-                std::find(
-                std::begin(open_parens),
-                std::end(open_parens),
-                this->input[line_number][current_pos])
+                std::get<0>(next_match) == "THREE_DOUBLE_QUOTES" ||
+                std::get<0>(next_match) == "THREE_SINGLE_QUOTES"
             ) {
-                paren_level--;
+                // NOTE: multiline string starting
+                string_close_regex = this->get_string_close_regex(std::get<0>(next_match));
+                string_start = {line_number+1, current_pos};
+                string_value = std::get<1>(next_match);
+                string_close_value = std::get<1>(next_match);
+                current_pos += std::get<1>(next_match).size();
+                in_string = true;
+            }
+            else {
+                // NOTE: anything that is not an OP should be handled above
+                assert(std::get<0>(next_match) == "OP");
+
+                // NOTE: check for opening/closing characters
+                if (
+                    std::find(
+                        std::begin(open_parens),
+                        std::end(open_parens),
+                        this->input[line_number][current_pos]
+                    ) != open_parens.end()
+                ) {
+                    paren_level++;
+                }
+                else if (
+                    std::find(
+                        std::begin(close_parens),
+                        std::end(close_parens),
+                        this->input[line_number][current_pos]
+                    ) != close_parens.end()
+                ) {
+                    paren_level--;
+                }
+
+                this->push_token(
+                    std::get<0>(next_match),
+                    std::get<1>(next_match),
+                    line_number,
+                    current_pos
+                );
             }
 
             current_pos += std::get<1>(next_match).size();
@@ -276,6 +361,28 @@ void Tokenizer::push_token(
             value,
             {line_number+1, current_pos},
             {line_number+1, current_pos+value.size()}
+        )
+    );
+}
+/**
+ *  @brief Pushes a Token based on inputs to this->tokens.
+ *  @param type Token type.
+ *  @param value Token value.
+ *  @param start starting line and column.
+ *  @param end ending line and column.
+**/
+void Tokenizer::push_token(
+    std::string type,
+    std::string value,
+    std::tuple<int, int> start,
+    std::tuple<int, int> end
+) {
+    this->tokens.push_back(
+        Token(
+            type,
+            value,
+            start,
+            end
         )
     );
 }
