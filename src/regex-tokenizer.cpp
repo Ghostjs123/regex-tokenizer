@@ -81,6 +81,9 @@ Tokenizer::Tokenizer(std::vector<std::string> input) {
  *  @brief Initializes this->regexs.
 **/
 void Tokenizer::build_regexs() {
+    this->s_regex_three_double_quotes_same_line = std::regex("^(\"\"\".*\"\"\")");
+    this->s_regex_three_single_quotes_same_line = std::regex("^('''.*''')");
+
     // NOTE: there is baked in top to bottom precedence here (top is highest)
     this->regexs = {
         {"OP", std::regex("^(\\()")},
@@ -98,14 +101,13 @@ void Tokenizer::build_regexs() {
         {"OP", std::regex("^(\\*)")},
         {"OP", std::regex("^(//)")},
         {"OP", std::regex("^(/)")},
-        // NOTE: the following 4 STRING regex's handle strings that terminate on the same line
-        {"STRING", std::regex("^(\"\"\".*\"\"\")")},
-        {"STRING", std::regex("^('''.*''')")},
-        {"STRING", std::regex("^(r?b?\".*\")")},  // NOTE: strings can be like rb"" or just ""
-        {"STRING", std::regex("^(r?b?'.*')")},  // NOTE: strings can be like rb'' or just ''
         // NOTE: these next 2 regex's are for multiline strings
+        // NOTE: these will also catch the start of strings like: """asd"""  (all on same line)
         {"THREE_DOUBLE_QUOTES", std::regex("^(\"\"\")")},
         {"THREE_SINGLE_QUOTES", std::regex("^(''')")},
+        // NOTE: the following 2 STRING regex's handle strings that terminate on the same line
+        {"STRING", std::regex("^(r?b?\".*\")")},  // NOTE: strings can be like rb"" or just ""
+        {"STRING", std::regex("^(r?b?'.*')")},  // NOTE: strings can be like rb'' or just ''
         {"COMMENT", std::regex("^(#.*)")},
         {"NUMBER", std::regex("^(-?[0-9.,]+)")},  // NOTE: using + and not *
         {"NAME", std::regex("^([a-zA-Z0-9_]+)")}  // NOTE: using + and not *
@@ -119,25 +121,48 @@ void Tokenizer::build_regexs() {
 **/
 std::tuple<std::string, std::string> Tokenizer::apply_regexs(std::string& line) {
     std::smatch match;
+    std::string match_type;
     std::string match_result;
 
     for (auto regex_tuple : this->regexs) {
         if (std::regex_search(line, match, std::get<1>(regex_tuple))) {
+            match_type = std::get<0>(regex_tuple);
             match_result = match[0];
-            line.erase(0, ((std::string)match[0]).size());  // NOTE: this erases match[0] as well
 
-            return {std::get<0>(regex_tuple), match_result};
+            // NOTE: if its ''' or """ then need to double check that
+            // it doesn't terminate on the same line
+            if (std::get<0>(regex_tuple) == "THREE_DOUBLE_QUOTES") {
+                if (std::regex_search(line, match, this->s_regex_three_double_quotes_same_line)) {
+                    match_type = "STRING";
+                    match_result = match[0];
+                }
+            }
+            else if (std::get<0>(regex_tuple) == "THREE_SINGLE_QUOTES") {
+                if (std::regex_search(line, match, this->s_regex_three_single_quotes_same_line)) {
+                    match_type = "STRING";
+                    match_result = match[0];
+                }
+            }
+            line.erase(0, match_result.size());  // NOTE: this erases match[0] as well
+
+            return {match_type, match_result};
         }    
     }
 
     throw std::runtime_error("No regex matched: " + line);
 }
 
+
+/**
+ *  @brief Fetches a regex to check for the closing of a multiline string.
+ *  @param type opening string type, either THREE_DOUBLE_QUOTES (""") or THREE_SINGLE_QUOTES (''').
+ *  @returns A std::regex sufficient to search for the closing of the multiline string.
+**/
 std::regex Tokenizer::get_string_close_regex(std::string type) {
     if (type == "THREE_DOUBLE_QUOTES") {
         return std::regex("\"\"\"");
     }
-    else if (type == "THREE_DOUBLE_QUOTES") {
+    else if (type == "THREE_SINGLE_QUOTES") {
         return std::regex("'''");
     }
     throw std::runtime_error(
@@ -151,7 +176,7 @@ int Tokenizer::check_string_termination(std::string line, std::regex close_regex
     std::smatch match;
     
     if (std::regex_search(line, match, close_regex)) {
-        return -1;
+        return match.position() + ((std::string)match[0]).size();
     }
 
     return -1;
@@ -227,7 +252,7 @@ void Tokenizer::tokenize() {
             }
             else {
                 // NOTE: this line belongs to the current multiline string
-                string_value += "\n" + this->input[line_number];
+                string_value += this->input[line_number] + "\\n";
                 continue;
             }
         }
@@ -350,7 +375,11 @@ void Tokenizer::tokenize() {
         if (paren_level > 0) {
             this->push_nl(line_number, current_pos);
         } else {
-            this->push_newline(line_number, current_pos);
+            if (in_string) {
+                string_value += "\\n";
+            } else {
+                this->push_newline(line_number, current_pos);
+            }
         }
         
     }
@@ -464,8 +493,13 @@ void Tokenizer::push_eof(std::vector<int> indents, int line_number) {
     );
 }
 
+/**
+ *  @brief Fetches a Token from this->tokens at position i.
+ *  @param i index of Token to fetch.
+ *  @returns Token at position i in this->tokens, or Token() if oob.
+**/
 Token Tokenizer::at(int i) {
-    if (i < this->tokens.size()) {
+    if (i >= 0 && i < this->tokens.size()) {
         return this->tokens.at(i);
     }
     return Token();

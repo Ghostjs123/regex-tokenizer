@@ -14,6 +14,8 @@ class Tokenizer {
     private:
         int pos;
         std::vector<std::tuple<std::string, std::regex>> regexs;
+        std::regex s_regex_three_double_quotes_same_line;
+        std::regex s_regex_three_single_quotes_same_line;
         std::vector<std::string> input;
         std::vector<Token> tokens;
 
