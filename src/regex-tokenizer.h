@@ -29,14 +29,9 @@ class Tokenizer {
         void tokenize();
 
         // Token push functions
+        void push_encoding();
         void push_newline(int line_number, int current_pos);
         void push_nl(int line_number, int current_pos);
-        void push_token(
-            std::string type,
-            std::string value,
-            int line_number,
-            int current_pos
-        );
         void push_token(
             std::string type,
             std::string value,
@@ -45,11 +40,12 @@ class Tokenizer {
         );
         void push_indent(std::string value, int line_number);
         void push_dedent(int line_number);
-        void push_eof();
+        void push_eof(std::vector<int> indents, int line_number);
 
     public:
         Tokenizer(std::vector<std::string> input);
 
+        Token at(int i);
         Token next_token();
         void print();
 };

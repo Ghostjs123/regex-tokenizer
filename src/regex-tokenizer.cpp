@@ -148,6 +148,12 @@ std::regex Tokenizer::get_string_close_regex(std::string type) {
 }
 
 int Tokenizer::check_string_termination(std::string line, std::regex close_regex) {
+    std::smatch match;
+    
+    if (std::regex_search(line, match, close_regex)) {
+        return -1;
+    }
+
     return -1;
 }
 
@@ -178,18 +184,24 @@ int Tokenizer::lstrip_spaces(int line_number, int current_pos) {
 void Tokenizer::tokenize() {
     std::vector<int> indents{0};  // NOTE: pushing the single 0 mentioned in the comments above
 
+    std::tuple<int, int> start;
+
     // NOTE: flag for multi-line strings
     bool in_string = false;
     std::string string_value;
     std::string string_close_value;
     std::tuple<int, int> string_start;
     std::regex string_close_regex;
+
     // NOTE: counter for opening/closing ([{
     int paren_level = 0;
-    const std::vector<char> open_parens{'(', '[', '{'};
-    const std::vector<char> close_parens{')', ']', '}'};
+    const std::vector<std::string> open_parens{"(", "[", "{"};
+    const std::vector<std::string> close_parens{")", "]", "}"};
 
-    for (int line_number=0; line_number < this->input.size(); line_number++) {
+    this->push_encoding();
+
+    int line_number = 0;  // NOTE: needed for eof after the loop
+    for (line_number=0; line_number < this->input.size(); line_number++) {
         // NOTE: intentionally ommiting '\r' and '\n'
         int current_pos = this->input[line_number].find_first_not_of("\t ");
 
@@ -228,11 +240,16 @@ void Tokenizer::tokenize() {
             }
             else if (input[line_number][current_pos] == '#') {
                 // NOTE: found a comment
+                std::string comment_value = input[line_number].substr(current_pos);
                 this->push_token(
                     "COMMENT",
-                    input[line_number].substr(current_pos),
+                    comment_value,
+                    {line_number+1, current_pos},
+                    {line_number+1, current_pos+comment_value.size()}
+                );
+                this->push_nl(
                     line_number,
-                    current_pos
+                    current_pos+comment_value.size()
                 );
                 continue;
             }
@@ -264,7 +281,10 @@ void Tokenizer::tokenize() {
 
         // NOTE: tokenize the line
         while (this->input[line_number].size() > 0) {
+            current_pos += this->lstrip_spaces(line_number, current_pos);
             auto next_match = this->apply_regexs(this->input[line_number]);
+            start = {line_number+1, current_pos};
+            current_pos += std::get<1>(next_match).size();
 
             if (
                 std::get<0>(next_match) == "NUMBER" ||
@@ -276,8 +296,8 @@ void Tokenizer::tokenize() {
                 this->push_token(
                     std::get<0>(next_match),
                     std::get<1>(next_match),
-                    line_number,
-                    current_pos
+                    start,
+                    {line_number+1, current_pos}
                 );
             }
             else if (
@@ -301,7 +321,7 @@ void Tokenizer::tokenize() {
                     std::find(
                         std::begin(open_parens),
                         std::end(open_parens),
-                        this->input[line_number][current_pos]
+                        std::get<1>(next_match)
                     ) != open_parens.end()
                 ) {
                     paren_level++;
@@ -310,23 +330,20 @@ void Tokenizer::tokenize() {
                     std::find(
                         std::begin(close_parens),
                         std::end(close_parens),
-                        this->input[line_number][current_pos]
+                        std::get<1>(next_match)
                     ) != close_parens.end()
                 ) {
                     paren_level--;
+                    assert(paren_level >= 0);
                 }
 
                 this->push_token(
                     std::get<0>(next_match),
                     std::get<1>(next_match),
-                    line_number,
-                    current_pos
+                    start,
+                    {line_number, current_pos}
                 );
             }
-
-            current_pos += std::get<1>(next_match).size();
-            // NOTE: skipping whitespace between tokens
-            current_pos += this->lstrip_spaces(line_number, current_pos);
         }
 
         // NOTE: done tokenizing the line, push a NL/NEWLINE
@@ -339,31 +356,16 @@ void Tokenizer::tokenize() {
     }
 
     // NOTE: done tokenizing the file, cleanup and push ENDMARKER
-    this->push_eof();
+    this->push_eof(indents, line_number);
 }
 
 /**
- *  @brief Pushes a Token based on inputs to this->tokens.
- *  @param type Token type.
- *  @param value Token value.
- *  @param line_number current line number being tokenized.
- *  @param current_pos current position in the line.
+ *  @brief Pushes an ENCODING Token to this->tokens.
 **/
-void Tokenizer::push_token(
-    std::string type,
-    std::string value,
-    int line_number,
-    int current_pos
-) {
-    this->tokens.push_back(
-        Token(
-            type,
-            value,
-            {line_number+1, current_pos},
-            {line_number+1, current_pos+value.size()}
-        )
-    );
+void Tokenizer::push_encoding() {
+    this->tokens.push_back(Token("ENCODING", "utf-8", {0, 0}, {0, 0}));
 }
+
 /**
  *  @brief Pushes a Token based on inputs to this->tokens.
  *  @param type Token type.
@@ -377,14 +379,7 @@ void Tokenizer::push_token(
     std::tuple<int, int> start,
     std::tuple<int, int> end
 ) {
-    this->tokens.push_back(
-        Token(
-            type,
-            value,
-            start,
-            end
-        )
-    );
+    this->tokens.push_back(Token(type, value, start, end));
 }
 
 /**
@@ -452,9 +447,28 @@ void Tokenizer::push_nl(int line_number, int current_pos) {
 
 /**
  *  @brief Pushes an ENDMARKER Token to this->tokens.
+ *  @param indents current INDENT stack.
+ *  @param line_number current line number being tokenized.
 **/
-void Tokenizer::push_eof() {
+void Tokenizer::push_eof(std::vector<int> indents, int line_number) {
+    while (indents.size() > 1) {
+        // NOTE: the 0 on the stack should never be popped
+        this->push_dedent(line_number);
+        indents.pop_back();
+    }
+    this->push_token(
+        "ENDMARKER",
+        "",
+        {line_number+1, 0},
+        {line_number+1, 0}
+    );
+}
 
+Token Tokenizer::at(int i) {
+    if (i < this->tokens.size()) {
+        return this->tokens.at(i);
+    }
+    return Token();
 }
 
 /**

@@ -23,6 +23,7 @@ class Token {
             std::tuple<int, int> end
         );
 
+        char get_quotes() const;
 		std::string as_string();
         friend std::ostream& operator<<(std::ostream& os, const Token& token);
 		friend bool operator==(const Token& lhs, const Token& rhs);

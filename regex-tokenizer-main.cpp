@@ -104,9 +104,10 @@ std::vector<Token> parse_tokens(std::string result) {
 	std::vector<Token> python_tokens;
 	std::vector<std::string> lines = split_newline(&result[0]);
 
-	int colon = +':';
-	int apostrophe = +'\'';
-	int space = +' ';
+	const int colon = +':';
+	const int apostrophe = +'\'';
+	const int double_quotes = +'"';
+	const int space = +' ';
 
 	std::vector<int> codes;
 	std::vector<int>::iterator iter;
@@ -115,8 +116,8 @@ std::vector<Token> parse_tokens(std::string result) {
 		codes = as_char_codes(s);
 		
 		// determine the position of the token
-		iter = find(codes.begin(), codes.end(), colon);
-		int pos_end = distance(codes.begin(), iter);
+		iter = std::find(codes.begin(), codes.end(), colon);
+		int pos_end = std::distance(codes.begin(), iter);
 		std::tuple<int, int, int, int> position = parse_position(
 			std::vector<int>(codes.begin(), codes.begin()+pos_end)
 		);
@@ -124,19 +125,33 @@ std::vector<Token> parse_tokens(std::string result) {
 		std::tuple<int, int> pos2(std::get<2>(position), std::get<3>(position));
 
 		// determine the type of the token
-		iter = find_if(codes.begin()+pos_end+1, codes.end(), not_space);
-		int type_start = distance(codes.begin(), iter);
-		iter = find(codes.begin()+type_start, codes.end(), space);
-		int type_end = distance(codes.begin(), iter);
+		iter = std::find_if(codes.begin()+pos_end+1, codes.end(), not_space);
+		int type_start = std::distance(codes.begin(), iter);
+		iter = std::find(codes.begin()+type_start, codes.end(), space);
+		int type_end = std::distance(codes.begin(), iter);
 		std::string type = codes_as_string(
 			std::vector<int>(codes.begin()+type_start, codes.begin()+type_end)
 		);
 
 		// determine the value of the token
-		iter = find(codes.begin()+type_end, codes.end(), apostrophe);
-		int value_start = distance(codes.begin(), iter);
-		iter = find(codes.begin()+value_start+1, codes.end(), apostrophe);
-		int value_end = distance(codes.begin(), iter);
+		// NOTE: values are wrapped in either a ' or a ", finding start
+		int value_start;
+		iter = std::find(codes.begin()+type_end, codes.end(), apostrophe);
+		int value_start1 = std::distance(codes.begin(), iter);
+		iter = std::find(codes.begin()+type_end, codes.end(), double_quotes);
+		int value_start2 = std::distance(codes.begin(), iter);
+		int value_end;
+		if (value_start1 < value_start2) {
+			// looking for an ending '
+			value_start = value_start1;
+			value_end = s.find_last_of("'");
+		}
+		else {
+			// looking for an ending "
+			value_start = value_start2;
+			value_end = s.find_last_of("\"");
+		}
+		// fetching substring
 		std::string value = codes_as_string(
 			std::vector<int>(codes.begin()+value_start+1, codes.begin()+value_end)
 		);
@@ -149,22 +164,27 @@ std::vector<Token> parse_tokens(std::string result) {
 
 void print_mismatch(
 	Tokenizer tokenizer,
-	Token prev, Token curr,
 	std::vector<Token> python_tokens,
 	int i
 ) {
-	std::cout << std::endl << "Tokens did not match on line: " << curr.line_start << std::endl;
-	std::cout << "mine:" << std::endl;
+	std::cout
+		<< std::endl
+		<< "Tokens did not match on line: "
+		<< tokenizer.at(i).line_start
+		<< std::endl;
+	std::cout
+		<< "mine:"
+		<< std::endl;
 
-	if (prev != Token()) {
+	if (i > 0) {
 		std::cout
-			<< prev << std::endl 
-			<< curr << std::endl 
-			<< tokenizer.next_token() << std::endl;
+			<< tokenizer.at(i-1) << std::endl
+			<< tokenizer.at(i) << std::endl
+			<< tokenizer.at(i+1) << std::endl;
 	}
 	else {
 		std::cout
-			<< curr << std::endl 
+			<< tokenizer.at(i) << std::endl
 			<< tokenizer.next_token() << std::endl;
 	}
 
@@ -172,8 +192,8 @@ void print_mismatch(
 
 	if (i > 0) {
 		std::cout
-			<< python_tokens.at(i-1) << std::endl 
-			<< python_tokens.at(i) << std::endl 
+			<< python_tokens.at(i-1) << std::endl
+			<< python_tokens.at(i) << std::endl
 			<< python_tokens.at(i+1) << std::endl;
 	}
 	else {
@@ -187,20 +207,16 @@ void compare_tokens(std::string fname, Tokenizer tokenizer) {
 	std::string cmd = "python3 -m tokenize " + fname;
 	std::string result = execute_python_tokenizer(cmd.c_str());
 	std::vector<Token> python_tokens = parse_tokens(result);
-	python_tokens.erase(python_tokens.begin());  // delete encoding token
 
-	Token t = python_tokens.at(0);  // ignore initial value
-	Token prev = Token();
 	for (int i=0; i < python_tokens.size(); i++) {
-		if (python_tokens.at(i) != (t = tokenizer.next_token())) {
-			print_mismatch(tokenizer, prev, t, python_tokens, i);
+		if (python_tokens.at(i) != tokenizer.at(i)) {
+			print_mismatch(tokenizer, python_tokens, i);
 			std::cout 
 				<< std::endl
 				<<"Tokens DID NOT match 'python -m tokenize'"
 				<< std::endl;
 			return;
 		}
-		prev = t;
 	}
 	std::cout << std::endl << "Tokens match 'python -m tokenize'" << std::endl;
 }
