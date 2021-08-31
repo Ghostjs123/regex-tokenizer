@@ -7,7 +7,7 @@
 
 bool is_number(const std::string& s) {
     try {
-        std::stod(s);
+        (void)std::stod(s);
         return true;
     }
     catch(...) {
@@ -16,7 +16,7 @@ bool is_number(const std::string& s) {
 }
 
 std::string pad_string(std::string str, int size, char c=' ') {
-    if (str.size() > size) {
+    if ((int)str.size() > size) {
         std::string msg = "attempted to pad \'" 
              + str + "\' of length " + std::to_string(str.size()) 
              + " to a length of " + std::to_string(size);

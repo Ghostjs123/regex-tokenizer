@@ -20,7 +20,7 @@ Token::Token() {
  *  @brief char constructor.
 **/
 Token::Token(
-    std::string type,
+    const std::string& type,
     char value,
     std::tuple<int, int> start,
     std::tuple<int, int> end
@@ -36,8 +36,8 @@ Token::Token(
  *  @brief std::string constructor.
 **/
 Token::Token(
-    std::string type,
-    std::string value,
+    const std::string& type,
+    const std::string& value,
     std::tuple<int, int> start,
     std::tuple<int, int> end
 ) {

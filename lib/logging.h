@@ -23,7 +23,7 @@ private:
     std::string get_mode_string();
 protected:
     Logger();
-    Logger(std::string fname);
+    explicit Logger(std::string fname);
 
     static Logger* logger;
 public:
@@ -38,7 +38,7 @@ public:
     static Logger* get_instance(const std::string& value);
 
 
-    void log(std::string msg, int mode);
+    void log(const std::string& msg, int mode);
     void set_mode(int mode);
     void add_indent(int amt);
     void sub_indent(int amt);

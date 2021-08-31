@@ -10,15 +10,15 @@ class Token {
 		int line_start, line_end, column_start, column_end;
 		
 		Token();
-		Token(
-            std::string type,
+        Token(
+            const std::string& type,
             char value,
             std::tuple<int, int> start,
             std::tuple<int, int> end
         );
 		Token(
-            std::string type,
-            std::string value,
+            const std::string& type,
+            const std::string& value,
             std::tuple<int, int> start,
             std::tuple<int, int> end
         );

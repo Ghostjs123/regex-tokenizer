@@ -23,16 +23,6 @@ std::string execute_python_tokenizer(const char* cmd) {
 	return result;
 }
 
-std::vector<int> as_char_codes(std::string line) {
-	std::vector<int> codes;
-
-	for (char c : line) {
-		codes.push_back(+c);
-	}
-
-	return codes;
-}
-
 std::vector<std::string> split_newline(char* result) {
 	std::vector<std::string> lines;
 	std::stringstream ss(result);
@@ -113,7 +103,7 @@ std::vector<Token> parse_tokens(std::string result) {
 	std::vector<int>::iterator iter;
 
 	for (std::string s : lines) {
-		codes = as_char_codes(s);
+		codes = std::vector<int>(s.begin(), s.end());
 		
 		// determine the position of the token
 		iter = std::find(codes.begin(), codes.end(), colon);
@@ -203,12 +193,12 @@ void print_mismatch(
 	}
 }
 
-void compare_tokens(std::string fname, Tokenizer tokenizer) {
+void compare_tokens(const std::string& fname, Tokenizer tokenizer) {
 	std::string cmd = "python3 -m tokenize " + fname;
 	std::string result = execute_python_tokenizer(cmd.c_str());
 	std::vector<Token> python_tokens = parse_tokens(result);
 
-	for (int i=0; i < python_tokens.size(); i++) {
+	for (int i=0; i < (int)python_tokens.size(); i++) {
 		if (python_tokens.at(i) != tokenizer.at(i)) {
 			print_mismatch(tokenizer, python_tokens, i);
 			std::cout 

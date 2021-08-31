@@ -36,7 +36,7 @@
 
 // NOTE: _sub and sub are neeed because c++'s builtin .substr() method
 // does not like carriage returns '\r' at the end of the string
-std::string _sub(std::string s, int prev, int i) {
+std::string _sub(std::string s, int prev, int i) { 
     std::string sn = "";
 
     for (int _i=prev; _i < i; _i++) {
@@ -69,7 +69,7 @@ void Tokenizer::clear() {
  *  @brief Tokenizer constructor. Tokenizes the input vector.
  *  @param input input to tokenize.
 **/
-Tokenizer::Tokenizer(std::vector<std::string> input) {
+Tokenizer::Tokenizer(const std::vector<std::string>& input) {
     this->clear();
     this->input = input;
 
@@ -152,13 +152,12 @@ std::tuple<std::string, std::string> Tokenizer::apply_regexs(std::string& line) 
     throw std::runtime_error("No regex matched: " + line);
 }
 
-
 /**
  *  @brief Fetches a regex to check for the closing of a multiline string.
  *  @param type opening string type, either THREE_DOUBLE_QUOTES (""") or THREE_SINGLE_QUOTES (''').
  *  @returns A std::regex sufficient to search for the closing of the multiline string.
 **/
-std::regex Tokenizer::get_string_close_regex(std::string type) {
+std::regex Tokenizer::get_string_close_regex(const std::string& type) {
     if (type == "THREE_DOUBLE_QUOTES") {
         return std::regex("\"\"\"");
     }
@@ -185,13 +184,12 @@ int Tokenizer::check_string_termination(std::string line, std::regex close_regex
 /**
  *  @brief Left strips whitespace from the current line in this->input.
  *  @param line_number current line being parsed.
- *  @param current_pos current position in the line.
  *  @returns The amount of stripped characters.
 **/
-int Tokenizer::lstrip_spaces(int line_number, int current_pos) {
+int Tokenizer::lstrip_spaces(int line_number) {
     int next_position = this->input[line_number].find_first_not_of(" ");
 
-    if (next_position == std::string::npos) {
+    if (next_position == (int)std::string::npos) {
         return 0;
     }
 
@@ -226,7 +224,7 @@ void Tokenizer::tokenize() {
     this->push_encoding();
 
     int line_number = 0;  // NOTE: needed for eof after the loop
-    for (line_number=0; line_number < this->input.size(); line_number++) {
+    for (line_number=0; line_number < (int)this->input.size(); line_number++) {
         // NOTE: intentionally ommiting '\r' and '\n'
         int current_pos = this->input[line_number].find_first_not_of("\t ");
 
@@ -306,7 +304,7 @@ void Tokenizer::tokenize() {
 
         // NOTE: tokenize the line
         while (this->input[line_number].size() > 0) {
-            current_pos += this->lstrip_spaces(line_number, current_pos);
+            current_pos += this->lstrip_spaces(line_number);
             auto next_match = this->apply_regexs(this->input[line_number]);
             start = {line_number+1, current_pos};
             current_pos += std::get<1>(next_match).size();
@@ -344,8 +342,8 @@ void Tokenizer::tokenize() {
                 // NOTE: check for opening/closing characters
                 if (
                     std::find(
-                        std::begin(open_parens),
-                        std::end(open_parens),
+                        open_parens.begin(),
+                        open_parens.end(),
                         std::get<1>(next_match)
                     ) != open_parens.end()
                 ) {
@@ -353,8 +351,8 @@ void Tokenizer::tokenize() {
                 }
                 else if (
                     std::find(
-                        std::begin(close_parens),
-                        std::end(close_parens),
+                        close_parens.begin(),
+                        close_parens.end(),
                         std::get<1>(next_match)
                     ) != close_parens.end()
                 ) {
@@ -499,7 +497,7 @@ void Tokenizer::push_eof(std::vector<int> indents, int line_number) {
  *  @returns Token at position i in this->tokens, or Token() if oob.
 **/
 Token Tokenizer::at(int i) {
-    if (i >= 0 && i < this->tokens.size()) {
+    if (i >= 0 && i < (int)this->tokens.size()) {
         return this->tokens.at(i);
     }
     return Token();
@@ -510,7 +508,7 @@ Token Tokenizer::at(int i) {
  *  @returns The next Token.
 **/
 Token Tokenizer::next_token() {
-    if (this->pos < this->tokens.size()) {
+    if (this->pos < (int)this->tokens.size()) {
         return this->tokens[this->pos++];
     }
     throw std::runtime_error("next_token() with no tokens remaining");

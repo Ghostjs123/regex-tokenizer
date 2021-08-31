@@ -49,10 +49,10 @@ std::string Logger::get_mode_string() {
     if (this->mode == DEBUG) return "DEBUG";
     if (this->mode == INFO) return "INFO";
     if (this->mode == WARNING) return "WARNING";
-    throw std::runtime_error("logger - unknown mode: " + this->mode);
+    throw std::runtime_error("logger - unknown mode: " + std::to_string(this->mode));
 }
 
-void Logger::log(std::string msg, int mode) {
+void Logger::log(const std::string& msg, int mode) {
     if (mode <= this-> mode) {
         cout << this->indent << msg << endl;
         if (this->f.is_open()) this->f << this->indent << msg << '\n';
@@ -70,7 +70,7 @@ void Logger::add_indent(int amt) {
 }
 
 void Logger::sub_indent(int amt) {
-    if (indent.size() < amt) {
+    if ((int)indent.size() < amt) {
         throw std::runtime_error("Attempted to subtract '" + std::to_string(amt) 
                 + "' from indent of size '" + std::to_string(this->indent.size()) + "'");
     }
