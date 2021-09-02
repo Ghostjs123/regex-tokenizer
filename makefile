@@ -1,11 +1,11 @@
-includes = -Ilib -Isrc
+includes = -Ilib -Isrc -Iunit_tests
 default_args = -pedantic -g
 
-libs = util.o logging.o
-tokenizer = regex-tokenizer.o token.o -lncurses
+libs = util.o logging.o unit-testing-util.o
+tokenizer = regex-tokenizer.o token.o -lncurses $(libs)
 
 regex-tokenizer-main: regex-tokenizer-main.cpp $(tokenizer)
-	g++ regex-tokenizer-main.cpp $(tokenizer) $(libs) $(default_args) $(includes) -o regex-tokenizer-main
+	g++ regex-tokenizer-main.cpp $(tokenizer) $(default_args) $(includes) -o regex-tokenizer-main
 
 # one off test files
 test_regex: test_regex.cpp
@@ -13,6 +13,8 @@ test_regex: test_regex.cpp
 
 # ===============================================================================
 # Object Files
+
+# src/
 
 regex-tokenizer.o: src/regex-tokenizer.cpp src/regex-tokenizer.h
 	g++ src/regex-tokenizer.cpp $(includes) $(default_args) -c -o regex-tokenizer.o
@@ -27,3 +29,8 @@ util.o: lib/util.cpp lib/util.h
 
 logging.o: lib/logging.cpp lib/logging.h
 	g++ lib/logging.cpp $(includes) $(default_args) -c -o logging.o
+
+# unit_tests/
+
+unit-testing-util.o: unit_tests/unit-testing-util.cpp
+	g++ unit_tests/unit-testing-util.cpp $(includes) $(default_args) -c -o unit-testing-util.o

@@ -303,8 +303,16 @@ void Tokenizer::tokenize() {
         }
 
         // NOTE: tokenize the line
+        bool first = true;
         while (this->input[line_number].size() > 0) {
-            current_pos += this->lstrip_spaces(line_number);
+            if (first) {
+                // NOTE: dont want to double count the initial whitespace on a line
+                (void)this->lstrip_spaces(line_number);
+                first = false;
+            }
+            else {
+                current_pos += this->lstrip_spaces(line_number);
+            }
             auto next_match = this->apply_regexs(this->input[line_number]);
             start = {line_number+1, current_pos};
             current_pos += std::get<1>(next_match).size();
@@ -329,7 +337,7 @@ void Tokenizer::tokenize() {
             ) {
                 // NOTE: multiline string starting
                 string_close_regex = this->get_string_close_regex(std::get<0>(next_match));
-                string_start = {line_number+1, current_pos};
+                string_start = start;
                 string_value = std::get<1>(next_match);
                 string_close_value = std::get<1>(next_match);
                 current_pos += std::get<1>(next_match).size();
@@ -364,7 +372,7 @@ void Tokenizer::tokenize() {
                     std::get<0>(next_match),
                     std::get<1>(next_match),
                     start,
-                    {line_number, current_pos}
+                    {line_number+1, current_pos}
                 );
             }
         }
@@ -435,7 +443,7 @@ void Tokenizer::push_dedent(int line_number) {
             "DEDENT",
             "",
             {line_number+1, 0},
-            {line_number+1, 1}
+            {line_number+1, 0}
         )
     );
 }
